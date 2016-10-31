@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+import numpy as np
 import sugartensor as tf
 import matplotlib.pyplot as plt
+import ipdb
 
 # set log level to debug
 tf.sg_verbosity(10)
@@ -17,8 +19,27 @@ z_dim = 50
 # create generator
 #
 
+# MNIST input tensor ( with QueueRunner )
+data = tf.sg_data.Mnist(batch_size=batch_size)
+
+# input images
+x = data.train.image
+image_shape = [28, 28]
+
 # random uniform seed
-z = tf.random_uniform((batch_size, z_dim))
+z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z')
+zhat = tf.random_uniform((batch_size, z_dim))
+mask = tf.placeholder(tf.float32, [None] + image_shape, name='mask')
+images = tf.placeholder(tf.float32, [None] + image_shape, name="real_images")
+
+def mask_gen(type="random", scale="0.2"):
+    if type == 'random':
+        mask = np.ones(image_shape)
+        # masks on all color chanels: image_shape[:2]
+        mask[np.random.random(image_shape[:2]) < scale] = 0.0
+
+    return mask
+
 
 with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
     # generator network
@@ -30,13 +51,14 @@ with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
            .sg_squeeze())
 
 
-#
-# draw samples
-#
+
+context_loss = tf.reduce_sum(tf.contrib.layers.flatten(tf.abs(tf.mul(mask, gen) - tf.mul(mask, images))), 1)
+
 
 with tf.Session() as sess:
     tf.sg_init(sess)
     # restore parameters
+    ipdb.set_trace()
     saver = tf.train.Saver()
     saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
