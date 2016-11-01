@@ -4,6 +4,7 @@ import numpy as np
 import ipdb
 import os
 
+
 import sys
 sys.path.append("../dcgan-completion.tensorflow")
 from utils import *
@@ -29,14 +30,15 @@ data = tf.sg_data.Mnist(batch_size=batch_size)
 
 # input images
 x = data.train.image
-image_shape = [28, 28]
-image_size = image_shape
+image_shape = [28, 28, 1]
+image_size = image_shape[0] 
 
 #
 # create generator
 #
 
 # random uniform seed
+z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z')
 
 with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
 
@@ -85,6 +87,7 @@ loss_gen = mse_fake + pt * pt_weight   # generator loss + PT regularizer
 train_disc = tf.sg_optim(loss_disc, lr=0.001, category='discriminator')  # discriminator train ops
 train_gen = tf.sg_optim(loss_gen, lr=0.001, category='generator')  # generator train ops
 
+batchSz = batch_size
 
 # +++++++++++++++++   add completion loss  ++++++++++++++++++++++
 # perceptual loss
@@ -92,10 +95,10 @@ lam = 0.1
 z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z')
 #z = tf.random_uniform((batch_size, z_dim))
 zhat = tf.random_uniform((batch_size, z_dim))
-mask = tf.placeholder(tf.float32, [None] + image_shape, name='mask')
+mask_p = tf.placeholder(tf.float32, [None] + image_shape, name='mask')
 images = tf.placeholder(tf.float32, [None] + image_shape, name="real_images")
 percept_loss = loss_gen
-context_loss = tf.reduce_sum(tf.contrib.layers.flatten(tf.abs(tf.mul(mask, gen) - tf.mul(mask, images))), 1)
+context_loss = tf.reduce_sum(tf.contrib.layers.flatten(tf.abs(tf.mul(mask_p, gen) - tf.mul(mask_p, images))), 1)
 complete_loss = context_loss + lam * percept_loss
 grad_complete_loss = tf.gradients(complete_loss, z)
 # +++++++++++++++++   add completion loss  ++++++++++++++++++++++
@@ -121,7 +124,7 @@ def load(checkpoint_dir):
     saver.restore(checkpoint_dir)
 
 # ++++++++++++++  Projected gradient descent on z +++++++++++++++
-def complete(sess, maskType):
+def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000):
    tf.initialize_all_variables().run()
    
    # generate masks
@@ -145,46 +148,55 @@ def complete(sess, maskType):
    else:
        assert(False)
 
-   # get images
-   base_dir = "../dcgan-completion.tensorflow/data/CelebA/test"
-   img_lst = os.listdir("../dcgan-completion.tensorflow/data/CelebA/test")
-   img_path = base_dir + img_lst
-   nImgs = len(img_lst)
+   # get images from default tensorflow mnist data class
+   from tensorflow.examples.tutorials.mnist import input_data
+   mnist=input_data.read_data_sets('MNIST_data',one_hot=True)
+   t_data = mnist.test.images[:batch_size, :]
+   batch_images = t_data.reshape((batch_size, 28, 28, 1))
+   nImgs = batch_images.shape[0]
 
-   batch_idxs = int(np.ceil(nImgs/batch_size))
+   # get images
+   #base_dir = "../dcgan-completion.tensorflow/data/CelebA/test/"
+   #img_lst = os.listdir("../dcgan-completion.tensorflow/data/CelebA/test")
+   #img_path = [base_dir + img_name for img_name in img_lst]
+   #nImgs = len(img_lst)
+
+   batch_idxs = int(np.ceil(nImgs/float(batch_size)))
+   batchSz = batch_size
    for idx in xrange(0, batch_idxs):
-       l = idx*batch_size
-       u = min((idx+1)*batch_size, nImgs)
-       batchSz = u-l
-       # load in the test imgs
-       batch_files = config.imgs[l:u]
-       batch = [get_image(batch_file, image_size)
-                for batch_file in batch_files]
-       batch_images = np.array(batch).astype(np.float32)
-       if batchSz < batch_size:
-           print(batchSz)
-           padSz = ((0, int(batch_size-batchSz)), (0,0), (0,0), (0,0))
-           batch_images = np.pad(batch_images, padSz, 'constant')
-           batch_images = batch_images.astype(np.float32)
+       #l = idx*batch_size
+       #u = min((idx+1)*batch_size, nImgs)
+       #batchSz = u-l
+       ## load in the test imgs
+       #batch = [get_image(batch_file, image_size)
+       #         for batch_file in img_path]
+       #batch_images = np.array(batch).astype(np.float32)
+       ## do padding if samples are not enough to form a batch
+       #if batchSz < batch_size:
+       #    print(batchSz)
+       #    padSz = ((0, int(batch_size-batchSz)), (0,0), (0,0), (0,0))
+       #    batch_images = np.pad(batch_images, padSz, 'constant')
+       #    batch_images = batch_images.astype(np.float32)
 
        # initilization
        batch_mask = np.resize(mask, [batch_size] + image_shape)
        zhats = np.random.uniform(-1, 1, size=(batch_size, z_dim))
        v = 0
 
-       nRows = np.ceil(batchSz/8)
+       nRows = np.ceil(batchSz/8.)
        nCols = 8
        save_images(batch_images[:batchSz,:,:,:], [nRows,nCols],
-                   os.path.join(config.outDir, 'before.png'))
+                   os.path.join(outDir, 'before.png'))
        masked_images = np.multiply(batch_images, batch_mask)
        save_images(masked_images[:batchSz,:,:,:], [nRows,nCols],
-                   os.path.join(config.outDir, 'masked.png'))
+                   os.path.join(outDir, 'masked.png'))
 
        # perform projected gradient descent on zhats
+       ipdb.set_trace()
        for i in xrange(nIter):
            fd = {
                z: zhats,
-               mask: batch_mask,
+               mask_p: batch_mask,
                images: batch_images,
            }
            run = [complete_loss, grad_complete_loss, gen]
@@ -211,13 +223,14 @@ def complete(sess, maskType):
                                       'completed/{:04d}.png'.format(i))
                save_images(completeed[:batchSz,:,:,:], [nRows,nCols], imgName)
 
-with tf.Session() as sess:
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config) as sess:
     tf.sg_init(sess)
     # restore parameters
-    ipdb.set_trace()
     saver = tf.train.Saver()
     saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
-    complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nImgs=100, nIter=10000)
+    complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000)
     # run generator
     #imgs = sess.run(gen)
 
