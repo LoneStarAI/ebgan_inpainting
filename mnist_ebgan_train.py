@@ -126,6 +126,8 @@ def load(checkpoint_dir):
 # ++++++++++++++  Projected gradient descent on z +++++++++++++++
 def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000):
    tf.initialize_all_variables().run()
+   saver = tf.train.Saver()
+   saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
    
    # generate masks
    if maskType == 'random':
@@ -192,13 +194,14 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                    os.path.join(outDir, 'masked.png'))
 
        # perform projected gradient descent on zhats
-       ipdb.set_trace()
        for i in xrange(nIter):
            fd = {
                z: zhats,
                mask_p: batch_mask,
                images: batch_images,
            }
+           ipdb.set_trace()
+           imgs=sess.run(gen, feed_dict={z: zhats})
            run = [complete_loss, grad_complete_loss, gen]
            loss, g, G_imgs = sess.run(run, feed_dict=fd)
 
@@ -227,9 +230,6 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     tf.sg_init(sess)
-    # restore parameters
-    saver = tf.train.Saver()
-    saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
     complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000)
     # run generator
     #imgs = sess.run(gen)

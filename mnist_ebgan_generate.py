@@ -24,22 +24,10 @@ data = tf.sg_data.Mnist(batch_size=batch_size)
 
 # input images
 x = data.train.image
-image_shape = [28, 28]
+image_shape = [28, 28, 1]
 
 # random uniform seed
-z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z')
-zhat = tf.random_uniform((batch_size, z_dim))
-mask = tf.placeholder(tf.float32, [None] + image_shape, name='mask')
-images = tf.placeholder(tf.float32, [None] + image_shape, name="real_images")
-
-def mask_gen(type="random", scale="0.2"):
-    if type == 'random':
-        mask = np.ones(image_shape)
-        # masks on all color chanels: image_shape[:2]
-        mask[np.random.random(image_shape[:2]) < scale] = 0.0
-
-    return mask
-
+z = tf.random_uniform((batch_size, z_dim))
 
 with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
     # generator network
@@ -52,9 +40,6 @@ with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
 
 
 
-context_loss = tf.reduce_sum(tf.contrib.layers.flatten(tf.abs(tf.mul(mask, gen) - tf.mul(mask, images))), 1)
-
-
 with tf.Session() as sess:
     tf.sg_init(sess)
     # restore parameters
@@ -65,7 +50,10 @@ with tf.Session() as sess:
     # run generator
     imgs = sess.run(gen)
 
-    # plot result
+    # plot generated images merged into a single png 
+    imgs = imgs.reshape([batch_size] + image_shape)
+    save_images(imgs, [13, 8], "outputImgs/generated.png")
+
     _, ax = plt.subplots(10, 10, sharex=True, sharey=True)
     for i in range(10):
         for j in range(10):
