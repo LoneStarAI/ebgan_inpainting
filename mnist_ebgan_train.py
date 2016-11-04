@@ -16,7 +16,7 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 2   # batch size
+batch_size = 32   # batch size
 z_dim = 50        # noise dimension
 margin = 1        # max-margin for hinge loss
 pt_weight = 0.1  # PT regularizer's weight
@@ -54,11 +54,9 @@ with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
 # create discriminator
 #
 
-# create real + fake image input
-xx = tf.concat(0, [x, gen])
 
 with tf.sg_context(name='discriminator', size=4, stride=2, act='leaky_relu'):
-    disc = (xx.sg_conv(dim=64)
+    disc = (gen.sg_conv(dim=64)
             .sg_conv(dim=128)
             .sg_upconv(dim=64)
             .sg_upconv(dim=1, act='linear'))
@@ -79,14 +77,14 @@ pt = tf.reduce_sum(pt) / (batch_size * (batch_size - 1))
 #
 
 # mean squared errors
-mse = tf.reduce_mean(tf.square(disc - xx), reduction_indices=[1, 2, 3])
-mse_real, mse_fake = mse[:batch_size], mse[batch_size:]
+mse_fake = tf.reduce_mean(tf.square(disc - gen), reduction_indices=[1, 2, 3])
+#mse_real, mse_fake = mse[:batch_size], mse[batch_size:]
 
-loss_disc = mse_real + tf.maximum(margin - mse_fake, 0)   # discriminator loss
+#loss_disc = mse_real + tf.maximum(margin - mse_fake, 0)   # discriminator loss
 loss_gen = mse_fake + pt * pt_weight   # generator loss + PT regularizer
 
-train_disc = tf.sg_optim(loss_disc, lr=0.001, category='discriminator')  # discriminator train ops
-train_gen = tf.sg_optim(loss_gen, lr=0.001, category='generator')  # generator train ops
+#train_disc = tf.sg_optim(loss_disc, lr=0.001, category='discriminator')  # discriminator train ops
+#train_gen = tf.sg_optim(loss_gen, lr=0.001, category='generator')  # generator train ops
 
 batchSz = batch_size
 
@@ -103,7 +101,7 @@ grad_complete_loss = tf.gradients(complete_loss, z)
 # +++++++++++++++++   add completion loss  ++++++++++++++++++++++
 
 # add summary
-tf.sg_summary_loss(tf.identity(loss_disc, name='disc'))
+#tf.sg_summary_loss(tf.identity(loss_disc, name='disc'))
 tf.sg_summary_loss(tf.identity(loss_gen, name='gen'))
 tf.sg_summary_image(gen)
 
@@ -122,6 +120,13 @@ def alt_train(sess, opt):
 # ++++++++++++++  Projected gradient descent on z +++++++++++++++
 def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000):
    tf.initialize_all_variables().run()
+   if os.path.exists(outDir):
+       import shutil
+       shutil.rmtree(outDir)
+    
+   os.makedirs(os.path.join(outDir, 'hats_imgs'))
+   os.makedirs(os.path.join(outDir, 'completed'))
+
    saver = tf.train.Saver()
    saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
    
@@ -200,14 +205,12 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                images: batch_images,
            }
            run_metadata = tf.RunMetadata()
-           ipdb.set_trace()
-           #run = [complete_loss, grad_complete_loss, gen]
-           run = [gen]
+           run = [complete_loss, grad_complete_loss, gen]
            #save_images(imgs, [4, 8], "outputImgs/generated_zhats.png")
-           loss, g, G_imgs = sess.run(run, feed_dict=fd, 
-                                options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-                                run_metadata=run_metadata)
-           #loss, g, G_imgs = sess.run(run, feed_dict=fd)
+           #loss, g, G_imgs = sess.run(run, feed_dict=fd, 
+           #                     options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+           #                     run_metadata=run_metadata)
+           loss, g, G_imgs = sess.run(run, feed_dict=fd)
 
            v_prev = np.copy(v)
            v = momentum*v - lr*g[0]
@@ -218,7 +221,7 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                print(i, np.mean(loss[0:batchSz]))
                imgName = os.path.join(outDir,
                                       'hats_imgs/{:04d}.png'.format(i))
-               nRows = np.ceil(batchSz/8)
+               nRows = np.ceil(batchSz/8.)
                nCols = 8
                # obtain and save the generated images
                save_images(G_imgs[:batchSz,:,:,:], [nRows,nCols], imgName)
@@ -234,7 +237,7 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     tf.sg_init(sess)
-    complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000)
+    complete(sess, maskType="center", lr=0.01, momentum=0.9, outDir="outputImgs", nIter=1000)
     # run generator
     #imgs = sess.run(gen)
 
