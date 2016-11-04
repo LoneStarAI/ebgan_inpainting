@@ -4,6 +4,9 @@ import sugartensor as tf
 import matplotlib.pyplot as plt
 import ipdb
 
+import sys
+sys.path.append("../dcgan-completion.tensorflow")
+from utils import *
 # set log level to debug
 tf.sg_verbosity(10)
 
@@ -28,6 +31,8 @@ image_shape = [28, 28, 1]
 
 # random uniform seed
 z = tf.random_uniform((batch_size, z_dim))
+# z can not be np.random type, has no z.sg_dense attribute
+#z = np.random.uniform(-1, 1, size=(batch_size, z_dim))
 
 with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
     # generator network
@@ -38,22 +43,21 @@ with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
            .sg_upconv(dim=1, act='sigmoid', bn=False)
            .sg_squeeze())
 
-
-
 with tf.Session() as sess:
     tf.sg_init(sess)
     # restore parameters
-    ipdb.set_trace()
     saver = tf.train.Saver()
     saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
     # run generator
+    ipdb.set_trace()
     imgs = sess.run(gen)
 
     # plot generated images merged into a single png 
     imgs = imgs.reshape([batch_size] + image_shape)
     save_images(imgs, [13, 8], "outputImgs/generated.png")
 
+    # plot images in GUI
     _, ax = plt.subplots(10, 10, sharex=True, sharey=True)
     for i in range(10):
         for j in range(10):

@@ -16,7 +16,7 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 32   # batch size
+batch_size = 2   # batch size
 z_dim = 50        # noise dimension
 margin = 1        # max-margin for hinge loss
 pt_weight = 0.1  # PT regularizer's weight
@@ -38,6 +38,7 @@ image_size = image_shape[0]
 #
 
 # random uniform seed
+#z = tf.random_uniform((batch_size, z_dim))
 z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z')
 
 with tf.sg_context(name='generator', size=4, stride=2, act='relu', bn=True):
@@ -92,8 +93,6 @@ batchSz = batch_size
 # +++++++++++++++++   add completion loss  ++++++++++++++++++++++
 # perceptual loss
 lam = 0.1
-z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z')
-#z = tf.random_uniform((batch_size, z_dim))
 zhat = tf.random_uniform((batch_size, z_dim))
 mask_p = tf.placeholder(tf.float32, [None] + image_shape, name='mask')
 images = tf.placeholder(tf.float32, [None] + image_shape, name="real_images")
@@ -119,9 +118,6 @@ def alt_train(sess, opt):
     l_gen = sess.run([loss_gen, train_gen])[0]  # training generator
     return np.mean(l_disc) + np.mean(l_gen)
 
-def load(checkpoint_dir):
-    saver = tf.Saver.trainer()
-    saver.restore(checkpoint_dir)
 
 # ++++++++++++++  Projected gradient descent on z +++++++++++++++
 def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=1000):
@@ -183,6 +179,7 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
        # initilization
        batch_mask = np.resize(mask, [batch_size] + image_shape)
        zhats = np.random.uniform(-1, 1, size=(batch_size, z_dim))
+       #zhats = tf.random_uniform((batch_size, z_dim))
        v = 0
 
        nRows = np.ceil(batchSz/8.)
@@ -194,16 +191,23 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                    os.path.join(outDir, 'masked.png'))
 
        # perform projected gradient descent on zhats
+       #z1 = tf.random_uniform((batch_size, z_dim))
+       #imgs = sess.run(gen, feed_dict={z: zhats})
        for i in xrange(nIter):
            fd = {
                z: zhats,
                mask_p: batch_mask,
                images: batch_images,
            }
+           run_metadata = tf.RunMetadata()
            ipdb.set_trace()
-           imgs=sess.run(gen, feed_dict={z: zhats})
-           run = [complete_loss, grad_complete_loss, gen]
-           loss, g, G_imgs = sess.run(run, feed_dict=fd)
+           #run = [complete_loss, grad_complete_loss, gen]
+           run = [gen]
+           #save_images(imgs, [4, 8], "outputImgs/generated_zhats.png")
+           loss, g, G_imgs = sess.run(run, feed_dict=fd, 
+                                options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+                                run_metadata=run_metadata)
+           #loss, g, G_imgs = sess.run(run, feed_dict=fd)
 
            v_prev = np.copy(v)
            v = momentum*v - lr*g[0]
