@@ -14,7 +14,7 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 100
+batch_size = 32 
 z_dim = 50
 
 
@@ -55,7 +55,7 @@ with tf.Session() as sess:
 
     # plot generated images merged into a single png 
     imgs = imgs.reshape([batch_size] + image_shape)
-    save_images(imgs, [13, 8], "outputImgs/generated.png")
+    save_images(imgs, [np.ceil(batch_size/8.), 8], "outputImgs/generated.png")
 
     # plot images in GUI
     _, ax = plt.subplots(10, 10, sharex=True, sharey=True)

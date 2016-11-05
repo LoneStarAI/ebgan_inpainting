@@ -132,11 +132,12 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
    
    # generate masks
    if maskType == 'random':
-       fraction_masked = 0.2
+       fraction_masked = 0.8
        mask = np.ones(image_shape)
        mask[np.random.random(image_shape[:2]) < fraction_masked] = 0.0
    elif maskType == 'center':
-       scale = 0.25
+       #1-2 * scale are masked:  larger scale masked less pixels
+       scale = 0.3
        assert(scale <= 0.5)
        mask = np.ones(image_shape)
        l = int(image_size*scale)
@@ -183,7 +184,7 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
 
        # initilization
        batch_mask = np.resize(mask, [batch_size] + image_shape)
-       zhats = np.random.uniform(-1, 1, size=(batch_size, z_dim))
+       zhats = np.random.uniform(0, 1, size=(batch_size, z_dim))
        #zhats = tf.random_uniform((batch_size, z_dim))
        v = 0
 
@@ -204,18 +205,18 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                mask_p: batch_mask,
                images: batch_images,
            }
-           run_metadata = tf.RunMetadata()
+           #run_metadata = tf.RunMetadata()
            run = [complete_loss, grad_complete_loss, gen]
-           #save_images(imgs, [4, 8], "outputImgs/generated_zhats.png")
            #loss, g, G_imgs = sess.run(run, feed_dict=fd, 
            #                     options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
            #                     run_metadata=run_metadata)
            loss, g, G_imgs = sess.run(run, feed_dict=fd)
 
+           #save_images(G_imgs, [4, 8], "outputImgs/generated_zhats.png")
            v_prev = np.copy(v)
            v = momentum*v - lr*g[0]
            zhats += -momentum * v_prev + (1+momentum)*v
-           zhats = np.clip(zhats, -1, 1)
+           zhats = np.clip(zhats, 0, 1)
 
            if i % 50 == 0:
                print(i, np.mean(loss[0:batchSz]))
@@ -225,6 +226,7 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                nCols = 8
                # obtain and save the generated images
                save_images(G_imgs[:batchSz,:,:,:], [nRows,nCols], imgName)
+               save_images(G_imgs[:batchSz,:,:,:], [nRows,nCols], "outputImgs/hats_img_final.png")
 
                inv_masked_hat_images = np.multiply(G_imgs, 1.0-batch_mask)
                # obtain and save the completed imgs
@@ -232,12 +234,13 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
                imgName = os.path.join(outDir,
                                       'completed/{:04d}.png'.format(i))
                save_images(completeed[:batchSz,:,:,:], [nRows,nCols], imgName)
+               save_images(completeed[:batchSz,:,:,:], [nRows,nCols], "outputImgs/completed_final.png")
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     tf.sg_init(sess)
-    complete(sess, maskType="center", lr=0.01, momentum=0.9, outDir="outputImgs", nIter=1000)
+    complete(sess, maskType="random", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=5000)
     # run generator
     #imgs = sess.run(gen)
 
