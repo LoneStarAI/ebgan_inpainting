@@ -19,7 +19,8 @@ tf.sg_verbosity(10)
 batch_size = 32   # batch size
 z_dim = 50        # noise dimension
 margin = 1        # max-margin for hinge loss
-pt_weight = 0.1  # PT regularizer's weight
+pt_weight = 0.1  # PT regularizer's weight, default 0.1
+lam = 0.1 # perceptual loss regularizer, default 0.1
 
 #
 # inputs
@@ -90,7 +91,6 @@ batchSz = batch_size
 
 # +++++++++++++++++   add completion loss  ++++++++++++++++++++++
 # perceptual loss
-lam = 0.1
 zhat = tf.random_uniform((batch_size, z_dim))
 mask_p = tf.placeholder(tf.float32, [None] + image_shape, name='mask')
 images = tf.placeholder(tf.float32, [None] + image_shape, name="real_images")
@@ -132,12 +132,12 @@ def complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs
    
    # generate masks
    if maskType == 'random':
-       fraction_masked = 0.8
+       fraction_masked = 0.4
        mask = np.ones(image_shape)
        mask[np.random.random(image_shape[:2]) < fraction_masked] = 0.0
    elif maskType == 'center':
        #1-2 * scale are masked:  larger scale masked less pixels
-       scale = 0.3
+       scale = 0.25
        assert(scale <= 0.5)
        mask = np.ones(image_shape)
        l = int(image_size*scale)
@@ -240,7 +240,7 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     tf.sg_init(sess)
-    complete(sess, maskType="random", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=5000)
+    complete(sess, maskType="center", lr=0.001, momentum=0.9, outDir="outputImgs", nIter=6000)
     # run generator
     #imgs = sess.run(gen)
 
